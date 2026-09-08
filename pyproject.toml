@@ -1,0 +1,31 @@
+[project]
+name = "corrosion_detection_mlops"
+version = "0.1.0"
+description = "Uma breve descrição do meu projeto"
+readme = "README.md"
+requires-python = ">=3.11.5"
+dependencies = [
+    "torch",
+    "torchvision",
+    "numpy",
+    "pillow",
+    "tqdm",
+    "dvc",
+    "mlflow",
+    "matplotlib",
+    "jupyter>=1.1.1",
+    "ipykernel>=7.3.0",
+    "ultralytics",
+    "imageio",
+    "opencv-python"
+]
+
+# Configuração correta para o UV buscar o PyTorch CUDA 13.0
+[[tool.uv.index]]
+name = "pytorch-cuda"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cuda" }
+torchvision = { index = "pytorch-cuda" }

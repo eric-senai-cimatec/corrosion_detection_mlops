@@ -7,15 +7,15 @@ __pycache__/
 *.so
 
 # Images
-# *.jpg
-# *.png
-# *jpeg
+*.jpg
+*.png
+*jpeg
 
 # Models
 *.pt
 
 # Texto
-# *.txt
+*.txt
 
 
 # Distribution / packaging

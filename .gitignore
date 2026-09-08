@@ -16,6 +16,7 @@ __pycache__/
 
 # Texto
 *.txt
+.dvc
 
 
 # Distribution / packaging
@@ -228,3 +229,4 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+/data

@@ -1,7 +1,0 @@
-path: C:\Users\eric.santoss\Documents\corrosion_detection_mlops\data
-train: images/train
-val: images/val
-test: images/test
-
-names:
-  0: corrosion

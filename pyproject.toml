@@ -17,7 +17,8 @@ dependencies = [
     "ipykernel>=7.3.0",
     "ultralytics",
     "imageio",
-    "opencv-python"
+    "opencv-python",
+    "dvc-gdrive"
 ]
 
 # Configuração correta para o UV buscar o PyTorch CUDA 13.0

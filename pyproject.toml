@@ -18,7 +18,8 @@ dependencies = [
     "ultralytics",
     "imageio",
     "opencv-python",
-    "dvc-gdrive"
+    "dvc-gdrive",
+    "PyYAML"
 ]
 
 # Configuração correta para o UV buscar o PyTorch CUDA 13.0

@@ -1,0 +1,2 @@
+data_path: C:\Users\eric.santoss\Documents\corrosion_detection_mlops\data
+model_path: C:\Users\eric.santoss\Documents\corrosion_detection_mlops\runs\detect\custom_yolo_model_yolo26n-3\weights\best.pt

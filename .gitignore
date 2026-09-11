@@ -16,7 +16,6 @@ __pycache__/
 
 # Texto
 *.txt
-.dvc
 
 
 # Distribution / packaging

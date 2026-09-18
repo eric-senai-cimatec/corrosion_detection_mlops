@@ -1,10 +1,15 @@
 import os
+import sys
 from mlflow import MlflowClient
 from ultralytics import YOLO
 
-# 1. Resolução da raiz do projeto e banco de dados SQLite
+# 1. Garante a raiz correta baseado na pasta atual do script
+# Como main.py está na raiz, o PROJECT_ROOT é o próprio diretório do arquivo.
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 os.environ["MLFLOW_TRACKING_URI"] = f"sqlite:///{os.path.join(PROJECT_ROOT, 'mlflow.db')}"
+
+# Define o caminho correto das imagens de produção
+ONLINE_DATA_DIR = os.path.join(PROJECT_ROOT, "online_data")
 
 print("Buscando o modelo 'champion' no Model Registry do MLflow...")
 
@@ -24,20 +29,44 @@ try:
 
     print(f"Modelo localizado e carregado com sucesso: {model_final_path}")
 
-    # 4. Carrega no YOLO para fazer predições
+    # 4. Carrega o modelo YOLO campeão
     model = YOLO(model_final_path)
 
-    # 5. Executa a inferência na imagem de teste
-    image_source = r"C:\Users\eric.santoss\Documents\corrosion_detection_mlops\data\images\test\1_jpg.rf.zmrrEH9XTrsjtb5X52YR.jpg"
+    # 5. Varre a pasta online_data procurando imagens válidas
+    valid_extensions = ('.jpg', '.jpeg', '.png', '.bmp', '.webp')
+    if not os.path.exists(ONLINE_DATA_DIR):
+        raise FileNotFoundError(
+            f"A pasta de produção não foi localizada em: {ONLINE_DATA_DIR}")
 
+    images = [os.path.join(ONLINE_DATA_DIR, f) for f in os.listdir(ONLINE_DATA_DIR) if f.lower().endswith(valid_extensions)]
+
+    if not images:
+        print(f"Nenhuma nova imagem encontrada na pasta: {ONLINE_DATA_DIR}")
+        sys.exit()
+
+    print(f"Iniciando pseudo-rotulagem de {len(images)} imagens do mundo real...")
+
+    # 6. Executa a inferência em lote (batch processing)
+    # save_txt=True gera os arquivos .txt com os rótulos automáticos
+    # save_conf=False evita salvar a confiança junto no arquivo txt (o YOLO de treino não aceita confiança no txt)
     results = model.predict(
-        source=image_source,
-        save=True,      # Salva os resultados visuais em runs/detect/predict
-        conf=0.25       # Limiar de confiança
+        source=ONLINE_DATA_DIR,
+        save=True,          # Salva o resultado visual para auditoria humana rápida
+        save_txt=True,      # GERA OS LABELS AUTOMÁTICOS NO FORMATO YOLO (.txt)
+        save_conf=False,    # Garante compatibilidade estrita com o formato do dataset de treino
+        conf=0.30           # Filtro de confiança: ignora detecções muito fracas e duvidosas
     )
 
-    print("\nPredição concluída! Verifique os resultados na pasta runs/detect/predict.")
+    # O YOLO por padrão salva os arquivos txt dentro de runs/detect/predictX/labels
+    # Vamos mover ou confirmar onde eles foram criados para o seu controle
+    if results:
+        save_dir = results[0].save_dir
+        txt_output_dir = os.path.join(save_dir, "labels")
+        print("\n🚀 Processo concluído com sucesso!")
+        print(f"📸 Imagens visuais salvas em: {save_dir}")
+        print(f"📄 Arquivos de anotação (.txt) gerados em: {txt_output_dir}")
+        print("\nPróximo passo recomendado de MLOps: Mesclar estas pastas no seu dataset oficial de treino!")
 
 except Exception as e:
-    print(f"\nErro ao carregar o modelo do Registry: {e}")
+    print(f"\nErro ao executar o pipeline de Pseudo-Labeling: {e}")
     print("Verifique se o seu modelo está registrado e com o alias 'champion' ativo na UI.")

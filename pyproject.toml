@@ -19,7 +19,8 @@ dependencies = [
     "imageio",
     "opencv-python",
     "dvc-gdrive",
-    "PyYAML"
+    "PyYAML",
+    "labelme"
 ]
 
 # Configuração correta para o UV buscar o PyTorch CUDA 13.0
@@ -31,3 +32,8 @@ explicit = true
 [tool.uv.sources]
 torch = { index = "pytorch-cuda" }
 torchvision = { index = "pytorch-cuda" }
+
+[tool.uv]
+required-environments = [
+    "sys_platform == 'win32' and platform_machine == 'AMD64'"
+]

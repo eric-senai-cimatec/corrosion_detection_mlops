@@ -1,6 +1,5 @@
 import os
 import sys
-from helper.config import load_config
 from ultralytics import YOLO, settings
 
 # 1. Configura os caminhos antes de fazer os imports customizados
@@ -12,29 +11,29 @@ if PROJECT_ROOT not in sys.path:
 
 
 def main():
-    # Define o local do banco de dados na raiz do projeto
+    # 2. Configura a URI local para o SQLite do MLflow
     os.environ["MLFLOW_TRACKING_URI"] = f"sqlite:///{os.path.join(PROJECT_ROOT, 'mlflow.db')}"
     os.environ["MLFLOW_EXPERIMENT_NAME"] = "Corrosion_Detection_YOLO"
 
     # Força a ativação do plugin do MLflow na Ultralytics
     settings.update({"mlflow": True})
 
-    # Carrega as configurações do config.yaml
-    data_path = load_config('data_path')
+    # 3. Localiza dinamicamente o seu arquivo de configuração YAML na raiz
+    config_yaml_path = os.path.join(PROJECT_ROOT, "model_config.yaml")
 
-    # Inicializa e treina o modelo YOLO
-    version = "yolo26n.pt"
-    model = YOLO(version)
+    if not os.path.exists(config_yaml_path):
+        raise FileNotFoundError(
+            f"Arquivo de configuracao nao encontrado em: {config_yaml_path}")
 
-    model.train(
-        data=data_path,
-        epochs=10,
-        imgsz=640,
-        batch=8,
-        augment=True,
-        workers=4,
-        name=f"custom_yolo_model_{version.split('.')[0]}"
-    )
+    # 4. Inicializa o modelo base definido no seu YAML (yolo26n.pt)
+    # Como o modelo está declarado dentro do YAML, você pode passar a string direto ou fixar
+    model = YOLO("yolo26n.pt")
+
+    print(
+        f"🚀 Iniciando treinamento do YOLO utilizando as configuracoes de: {config_yaml_path}")
+
+    # 5. A mágica acontece aqui: passamos apenas o caminho do arquivo no parâmetro 'cfg'
+    model.train(cfg=config_yaml_path)
 
 
 if __name__ == '__main__':

@@ -2,7 +2,7 @@ task: detect
 mode: train
 model: yolo26n.pt
 data: C:\Users\eric.santoss\Documents\corrosion_detection_mlops\data
-epochs: 10
+epochs: 50
 time: null
 patience: 100
 batch: 8
@@ -10,10 +10,10 @@ imgsz: 640
 save: true
 save_period: -1
 cache: false
-device: ''
+device: 'cuda'
 workers: 4
 project: null
-name: custom_yolo_model_yolo26n-3
+name: null
 exist_ok: false
 pretrained: true
 cls_remap: true
@@ -40,7 +40,7 @@ val: true
 split: val
 save_json: false
 conf: null
-iou: 0.7
+iou: 0.5
 max_det: 300
 quantize: null
 dnn: false
@@ -71,7 +71,7 @@ dynamic: false
 simplify: true
 opset: null
 workspace: null
-nms: false
+nms: true
 lr0: 0.01
 lrf: 0.01
 momentum: 0.937
@@ -113,4 +113,4 @@ auto_augment: randaugment
 erasing: 0.4
 cfg: null
 tracker: tracktrack.yaml
-save_dir: C:\Users\eric.santoss\Documents\corrosion_detection_mlops\runs\detect\custom_yolo_model_yolo26n-3
+save_dir: null

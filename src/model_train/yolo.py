@@ -19,7 +19,7 @@ def main():
     settings.update({"mlflow": True})
 
     # 3. Localiza dinamicamente o seu arquivo de configuração YAML na raiz
-    config_yaml_path = os.path.join(PROJECT_ROOT, "model_config.yaml")
+    config_yaml_path = os.path.join(PROJECT_ROOT, "model_args.yaml")
 
     if not os.path.exists(config_yaml_path):
         raise FileNotFoundError(

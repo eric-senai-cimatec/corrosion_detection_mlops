@@ -20,7 +20,8 @@ dependencies = [
     "opencv-python",
     "dvc-gdrive",
     "PyYAML",
-    "labelme"
+    "labelme",
+    "python-multipart"
 ]
 
 # Configuração correta para o UV buscar o PyTorch CUDA 13.0

@@ -21,14 +21,44 @@ def main():
 
     settings.update({"mlflow": True})
 
-    model_path = load_config('model_path')
+    # 1. Carrega o caminho do dataset (apenas o data_path continua vindo do config/yaml)
     data_path = load_config('data_path')
 
-    # Carregar o modelo treinado
+    # 2. LOCALIZAÇÃO AUTOMÁTICA E DINÂMICA DO ÚLTIMO MODELO TREINADO
+    base_detect_dir = os.path.join(PROJECT_ROOT, "runs", "detect")
+
+    # Lista todas as pastas de experimentos dentro de runs/detect/
+    all_train_folders = [
+        os.path.join(base_detect_dir, d)
+        for d in os.listdir(base_detect_dir)
+        if os.path.isdir(os.path.join(base_detect_dir, d)) and d != "predict"
+    ]
+
+    if not all_train_folders:
+        raise FileNotFoundError(
+            f"❌ Nenhuma pasta de treinamento encontrada em: {base_detect_dir}")
+
+    # Encontra a pasta que foi modificada por último (o treino que acabou de rodar)
+    latest_train_folder = max(all_train_folders, key=os.path.getmtime)
+
+    # Monta o caminho definitivo para o peso 'best.pt'
+    model_path = os.path.normpath(os.path.join(
+        latest_train_folder, "weights", "best.pt"))
+
+    if not os.path.exists(model_path):
+        raise FileNotFoundError(
+            f"❌ O arquivo de pesos 'best.pt' nao foi encontrado em: {model_path}")
+
+    print(f"📦 [Automação] Último treino localizado: {latest_train_folder}")
+    print(
+        f"🎯 [Automação] Carregando pesos para avaliação de teste: {model_path}")
+
+    # Carregar o modelo treinado de forma totalmente dinâmica
     model = YOLO(model_path)
 
     # Inicia a run exclusiva para o teste
     with mlflow.start_run(run_name="evaluation_test_set") as run:
+
         # Adiciona Tags estruturais para a Run
         mlflow.set_tag("pipeline_stage", "testing")
         mlflow.log_param("evaluated_model_path", model_path)
@@ -117,7 +147,7 @@ def main():
                     )
                 else:
                     print(
-                         "⚔️ CHALLENGER! Modelo passou nos testes, mas score geral inferior ao campeão atual.")
+                        "⚔️ CHALLENGER! Modelo passou nos testes, mas score geral inferior ao campeão atual.")
                     client.set_registered_model_alias(
                         name="Corrosion_Detection_YOLO_Model",
                         alias="challenger",

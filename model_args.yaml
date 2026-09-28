@@ -40,7 +40,7 @@ val: true
 split: val
 save_json: false
 conf: null
-iou: 0.5
+iou: 0.7
 max_det: 300
 quantize: null
 dnn: false

@@ -21,7 +21,10 @@ dependencies = [
     "dvc-gdrive",
     "PyYAML",
     "labelme",
-    "python-multipart"
+    "python-multipart",
+    "evidently",
+    "scikit-image",
+    "pandas"
 ]
 
 # Configuração correta para o UV buscar o PyTorch CUDA 13.0

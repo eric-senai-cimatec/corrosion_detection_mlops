@@ -27,18 +27,20 @@ def main():
     # 2. LOCALIZAÇÃO AUTOMÁTICA E DINÂMICA DO ÚLTIMO MODELO TREINADO
     base_detect_dir = os.path.join(PROJECT_ROOT, "runs", "detect")
 
-    # Lista todas as pastas de experimentos dentro de runs/detect/
+    # Lista APENAS pastas de treinos reais, ignorando validações (val) e predições (predict)
     all_train_folders = [
         os.path.join(base_detect_dir, d)
         for d in os.listdir(base_detect_dir)
-        if os.path.isdir(os.path.join(base_detect_dir, d)) and d != "predict"
+        if os.path.isdir(os.path.join(base_detect_dir, d))
+        and not d.startswith("predict")
+        and not d.startswith("val")
     ]
 
     if not all_train_folders:
         raise FileNotFoundError(
-            f"❌ Nenhuma pasta de treinamento encontrada em: {base_detect_dir}")
+            f"❌ Nenhuma pasta de treinamento válida encontrada em: {base_detect_dir}")
 
-    # Encontra a pasta que foi modificada por último (o treino que acabou de rodar)
+    # Encontra a pasta de treino modificada por último pelo sistema operacional
     latest_train_folder = max(all_train_folders, key=os.path.getmtime)
 
     # Monta o caminho definitivo para o peso 'best.pt'
@@ -98,8 +100,8 @@ def main():
         client = MlflowClient()
 
         # Definição das Regras de Negócio Básicas (Thresholds)
-        MIN_MAP50 = 0.50   # Precisão mínima de localização
-        MIN_RECALL = 0.40  # Mínimo de taxa de captura de defeitos real
+        MIN_MAP50 = 0.40   # Precisão mínima de localização
+        MIN_RECALL = 0.50  # Mínimo de taxa de captura de defeitos real
 
         print("\n--- VALIDAÇÃO DE REGRAS DE NEGÓCIO ---")
         print(

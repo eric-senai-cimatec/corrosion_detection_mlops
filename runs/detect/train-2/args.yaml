@@ -10,10 +10,10 @@ imgsz: 640
 save: true
 save_period: -1
 cache: false
-device: 'cuda'
+device: '0'
 workers: 4
 project: null
-name: null
+name: train-2
 exist_ok: false
 pretrained: true
 cls_remap: true
@@ -111,6 +111,6 @@ copy_paste: 0.0
 copy_paste_mode: flip
 auto_augment: randaugment
 erasing: 0.4
-cfg: null
+cfg: C:\Users\eric.santoss\Documents\corrosion_detection_mlops\model_args.yaml
 tracker: tracktrack.yaml
-save_dir: null
+save_dir: C:\Users\eric.santoss\Documents\corrosion_detection_mlops\runs\detect\train-2

@@ -21,59 +21,79 @@ python src/serving/app.py
 ```bash
 python src/serving/client_webcam.py
 ```
+*💡 Dica: Aponte a webcam para focar em cenários de teste com corrosão. Quando o terminal indicar que os frames foram gerados e salvos em `online_data/`, pressione a tecla **'q'** na janela de vídeo para encerrar.*
 
 ---
 
-## 🎨 Fase 2: Curadoria Humana & Active Learning (Human-in-the-Loop)
+## 🧭 Fase 2: Monitoramento & Orquestração Automatizada (Apache Airflow - Parte I)
 
-Com os novos frames reais de produção armazenados na pasta `online_data/`, o pipeline aciona a etapa de aceleração de anotação. O modelo gera pré-marcações no formato JSON aceito pelo **Labelme**, permitindo que o operador humano atue apenas como revisor e corretor dos boxes duvidosos.
+Com os dados de produção capturados na pasta `online_data/`, o Apache Airflow assume o papel de maestro. O monitoramento calcula se houve desvio estatístico (*Data Drift*) nas propriedades de brilho, contraste e cor das novas imagens utilizando o **Evidently AI**.
+
+### Passo 1: Inicializar o Ambiente do Airflow
+Antes de rodar a esteira, garanta que o seu servidor local do Apache Airflow esteja de pé e com as DAGs cadastradas:
+```bash
+# Inicializa o webserver e o scheduler do Airflow
+airflow db init
+airflow users create --username admin --firstname Eric --lastname Santos --email admin@mlops.com --role Admin --password admin
+airflow webserver --port 8080
+airflow scheduler
+```
+*💡 Acesse a interface web em `http://localhost:8080` com as credenciais criadas.*
+
+### Passo 2: Executar a DAG 1 (Monitoramento)
+A primeira DAG (`corrosion_phase1_monitoring`) executa a análise de drift e decide os próximos passos:
+1. Roda o script de observabilidade: `python -m src.observability.monitor`.
+2. Se o desvio atingir o limite crítico, o `BranchPythonOperator` dispara o script de Active Learning (`python -m src.data_automation.send_to_review`), gerando as pré-anotações automáticas e deixando os arquivos em `review_data/`.
+3. Se não houver drift, o pipeline encerra de forma limpa na própria interface do Airflow para poupar processamento.
+
+---
+
+## 🎨 Fase 3: Curadoria Humana & Active Learning (Human-in-the-Loop)
+
+Caso o Airflow tenha detectado Drift na fase anterior, as novas imagens com defeito estarão aguardando a sua revisão humana na pasta `review_data/` acompanhadas de pré-anotações inteligentes em JSON geradas pelo modelo campeão.
 
 ```bash
-# 1. Processa as novas imagens e gera os arquivos JSON de pré-anotação automática
-python -m src.data_automation.send_to_review
-
-# 2. Abre a interface gráfica do Labelme na pasta para auditoria e ajuste dos boxes
+# 1. Abre a interface gráfica do Labelme apontando para a fila de revisão humana
 labelme review_data
 
-# 3. Traduz os JSONs corrigidos para TXT (padrão YOLO) e consolida os dados na pasta de treino
+# 2. Quando terminar de corrigir/aprovar os boxes e clicar em salvar, execute o conversor:
 python -m src.data_automation.parse_review_to_train
 ```
+*💥 MÁGICA DE MLOps:* O script `parse_review_to_train.py` traduzirá os JSONs para arquivos `.txt` padrão YOLO, mesclará tudo com a sua base oficial de treino, limpará as pastas e **disparará de forma 100% automatizada um Webhook (API REST HTTP) que acorda a segunda DAG do Airflow** para processar o retreino, sem necessidade de intervenção humana no painel do orquestrador.
 
 ---
 
-## 📦 Fase 3: Versionamento de Dados & Linhagem (DVC)
+## 🏆 Fase 4: Sincronização, Retreino & Atualização Viva (Apache Airflow - Parte II)
 
-Após a consolidação dos novos dados na pasta oficial de treinamento (`data/`), é obrigatório registrar o novo estado imutável do dataset. O DVC calcula a nova assinatura digital (hash MD5) e sincroniza os dados físicos pesados diretamente com o Google Drive privado.
+A segunda DAG (`corrosion_phase2_retrain`) acorda imediatamente após o recebimento do sinal HTTP disparado pelo seu script de curadoria. Ela gerencia de ponta a ponta as tarefas pesadas de computação, governança e implantação contínua:
 
+### 4.1 Versionamento de Dados (DVC)
+*O Airflow executa automaticamente o isolamento das novas assinaturas imutáveis dos dados na nuvem:*
 ```bash
-# 4. Atualiza o arquivo de ponteiro leve local com o novo hash do dataset revisado
+# Atualiza o hash MD5 da pasta 'data' localmente no arquivo data.dvc e envia para o Google Drive
 dvc add data
-
-# 5. Faz o upload seguro das novas imagens e labels brutos para o repositório remoto (Google Drive)
 dvc push
 
-# 6. Registra as alterações do ponteiro do DVC no histórico de controle de versão do código
+# Registra as alterações do ponteiro do DVC no controle de versão do histórico do Git
 git add data.dvc
-git commit -m "chore: adiciona novos frames de corrosao reais ao dataset de treino"
+git commit -m "chore: adiciona novos frames de corrosao reais ao dataset de treino via pipeline"
 ```
 
----
-
-## 🏆 Fase 4: Treinamento, Governança Estrita & Atualização Viva
-
-Com os dados blindados na nuvem, inicia-se o ciclo de engenharia de Machine Learning. O script de avaliação executa um portão de qualidade multi-métrica. O modelo novo só assume o posto de `@champion` se passar pelos thresholds mínimos e superar o score combinado do antigo campeão. Se aprovado, a API em produção é atualizada em tempo real via HTTP.
-
+### 4.2 Treinamento, Governança Estrita & Deploy Contínuo (MLflow)
+*O Airflow dispara o ciclo de modelagem, avalia os resultados em relação ao campeão atual e atualiza a API em produção de forma viva:*
 ```bash
-# 7. Dispara o treinamento do YOLO no Windows gerenciando os subprocessos do DataLoader
+# 1. Inicia o treinamento do YOLO no Windows lendo as configurações do model_config.yaml
 python -m src.model_train.yolo
 
-# 8. Executa a validação no split de teste e aplica as travas de negócio (mAP50 > 50% & Recall > 40%)
+# 2. Executa a validação no split de teste filtrando as pastas pelo relógio do sistema (getmtime)
+# Aplica as travas de negócio multi-métrica (mAP50 > 50% & Recall > 40%) contra o Champion atual
 python -m src.model_eval.yolo
 
-# 9. Atualização Viva: Envia um sinal HTTP para a API recarregar o novo modelo sem gerar downtime
+# 3. CD (Continuous Deployment): Envia um sinal HTTP de recarregamento para o servidor de produção
+# A sua API FastAPI atualiza os pesos da memória em tempo real SEM DERRUBAR o sistema!
 curl -X POST http://127.0.0
 
-# 10. Inicia o painel gráfico do MLflow para auditoria de desempenho e governança do ciclo de vida
+# 4. Inicia o painel gráfico do MLflow para auditoria e histórico de execuções
 mlflow ui --backend-store-uri sqlite:///mlflow.db
 ```
-*💡 Dica: Após rodar o comando 10, acesse o endereço **`http://127.0.0.1:5000`** no seu navegador para auditar o status das versões na aba **Models**.*
+*💡 Nota: Acesse `http://127.0.0.1:5000` no seu navegador para verificar as tabelas comparativas das Runs e confirmar graficamente que a nova versão assumiu a etiqueta de **`champion`**.*

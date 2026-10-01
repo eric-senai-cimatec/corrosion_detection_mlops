@@ -24,7 +24,9 @@ dependencies = [
     "python-multipart",
     "evidently",
     "scikit-image",
-    "pandas"
+    "pandas",
+    "apache-airflow>=3.3.2",
+    "pendulum"
 ]
 
 # Configuração correta para o UV buscar o PyTorch CUDA 13.0

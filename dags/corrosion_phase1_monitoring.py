@@ -7,7 +7,6 @@ from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.python import BranchPythonOperator
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-VENV_PYTHON = os.path.join(PROJECT_ROOT, ".venv", "Scripts", "python.exe")
 LOCAL_TZ = pendulum.timezone("America/Sao_Paulo")
 
 default_args = {
@@ -59,7 +58,10 @@ with DAG(
     # 1. Calcula o Data Drift com o Evidently AI comparando a webcam com a base de treino
     task_run_observability = BashOperator(
         task_id='run_observability_monitor',
-        bash_command=f"{VENV_PYTHON} -m src.observability.monitor",
+        bash_command="/home/eric/projects/corrosion_detection_mlops/.venv/bin/python -m src.observability.monitor",
+        env={
+            "PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"
+        },
         cwd=PROJECT_ROOT
     )
 
@@ -78,7 +80,10 @@ with DAG(
     # Caminho B: Cria os JSONs estruturados de pseudo-anotacao na pasta review_data/
     task_generate_pseudo_labels = BashOperator(
         task_id='generate_pseudo_labels',
-        bash_command=f"{VENV_PYTHON} -m src.data_automation.send_to_review",
+        bash_command="/home/eric/projects/corrosion_detection_mlops/.venv/bin/python -m src.data_automation.send_to_review",
+        env={
+            "PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"
+        },
         cwd=PROJECT_ROOT
     )
 

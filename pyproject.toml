@@ -25,7 +25,7 @@ dependencies = [
     "evidently",
     "scikit-image",
     "pandas",
-    "apache-airflow>=3.3.2",
+    "apache-airflow",
     "pendulum"
 ]
 

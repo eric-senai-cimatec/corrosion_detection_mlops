@@ -5,7 +5,6 @@ from airflow import DAG
 from airflow.providers.standard.operators.bash import BashOperator
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-VENV_PYTHON = os.path.join(PROJECT_ROOT, ".venv", "Scripts", "python.exe")
 LOCAL_TZ = pendulum.timezone("America/Sao_Paulo")
 
 default_args = {
@@ -28,7 +27,10 @@ with DAG(
     # 1. Traduz o trabalho manual do Labelme para TXT normalizado e mescla com a pasta oficial
     task_merge_curated_data = BashOperator(
         task_id='merge_curated_data',
-        bash_command=f"{VENV_PYTHON} -m src.data_automation.parse_review_to_train",
+        bash_command="/home/eric/projects/corrosion_detection_mlops/.venv/bin/python -m src.data_automation.parse_review_to_train",
+        env={
+        "PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"
+    },
         cwd=PROJECT_ROOT
     )
 
@@ -36,20 +38,29 @@ with DAG(
     task_dvc_versioning = BashOperator(
         task_id='dvc_add_and_push',
         bash_command="dvc add data && dvc push",
+        env={
+        "PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"
+    },
         cwd=PROJECT_ROOT
     )
 
     # 3. Dispara o treinamento do YOLO com as augmentations e hiperparametros do model_config.yaml
     task_train_yolo = BashOperator(
         task_id='train_new_yolo_model',
-        bash_command=f"{VENV_PYTHON} -m src.model_train.yolo",
+        bash_command="/home/eric/projects/corrosion_detection_mlops/.venv/bin/python -m src.model_train.yolo",
+        env={
+        "PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"
+    },
         cwd=PROJECT_ROOT
     )
 
     # 4. Localiza o ultimo best.pt gerado e roda a avaliacao estrita (mAP50 + Recall vs Campeao)
     task_evaluate_and_gate = BashOperator(
         task_id='model_governance_evaluation',
-        bash_command=f"{VENV_PYTHON} -m src.model_eval.yolo",
+        bash_command="/home/eric/projects/corrosion_detection_mlops/.venv/bin/python -m src.model_eval.yolo",
+        env={
+        "PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"
+    },
         cwd=PROJECT_ROOT
     )
 
@@ -57,6 +68,9 @@ with DAG(
     task_live_reload = BashOperator(
         task_id='api_live_reload',
         bash_command='curl -X POST http://127.0.0.1:8000/reload',
+        env={
+        "PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"
+    },
         cwd=PROJECT_ROOT
     )
 

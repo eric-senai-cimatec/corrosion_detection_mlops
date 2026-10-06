@@ -37,7 +37,7 @@ with DAG(
     # 2. Versions the expanded dataset in DVC and synchronizes it with Google Drive
     task_dvc_versioning = BashOperator(
         task_id='dvc_add_and_push',
-        bash_command="dvc add data && dvc push",
+        bash_command="dvc add data",
         env={
             "PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"
         },

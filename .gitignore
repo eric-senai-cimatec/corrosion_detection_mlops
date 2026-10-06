@@ -16,6 +16,7 @@ __pycache__/
 
 # Texto
 *.txt
+review_data/
 
 
 # Distribution / packaging

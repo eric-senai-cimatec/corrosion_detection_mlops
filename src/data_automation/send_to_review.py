@@ -20,7 +20,13 @@ model_metadata = client.get_model_version_by_alias(
     "Corrosion_Detection_YOLO_Model", "champion")
 clean_path = model_metadata.source.replace(
     "file|///", "").replace("file:///", "").replace("|", "")
-model = YOLO(os.path.normpath(clean_path))
+
+normalized_path = os.path.normpath(clean_path)
+if normalized_path.startswith("home/"):
+    normalized_path = "/" + normalized_path
+
+print(f"🎯 [Automation] Loading model weights from absolute path: {normalized_path}")
+model = YOLO(normalized_path)
 
 # 2. Scans online images
 valid_extensions = ('.jpg', '.jpeg', '.png')

@@ -6,7 +6,8 @@ from airflow import DAG
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.python import BranchPythonOperator
 
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# LOCKS THE ABSOLUTE PATH OF THE REPOSITORY (Prevents Airflow scope errors)
+PROJECT_ROOT = "/home/eric/projects/corrosion_detection_mlops"
 LOCAL_TZ = pendulum.timezone("America/Sao_Paulo")
 
 default_args = {
@@ -17,34 +18,38 @@ default_args = {
     'retry_delay': timedelta(minutes=5),
 }
 
-
 def check_drift_and_decide():
-    json_path = os.path.join(PROJECT_ROOT, "runs",
-                             "observability", "drift_report.json")
+    json_path = os.path.join(PROJECT_ROOT, "runs", "observability", "drift_report.json")
+
+    print(f"🔍 [Airflow] Looking for report at: {json_path}")
 
     if not os.path.exists(json_path):
-        print(f"⚠️ File {json_path} not found. Aborting pipeline flow.")
+        print(f"⚠️ Report {json_path} not found. Aborting and stopping pipeline.")
         return 'stop_pipeline'
 
     with open(json_path, 'r') as f:
         report_data = json.load(f)
 
-    dataset_drifted = report_data.get(
-        "metrics", {}).get("dataset_drift", False)
-    drift_share = report_data.get("metrics", {}).get(
-        "share_of_drifted_columns", 0.0)
+    # Safe collection that attempts to read from both the metrics root and Evidently's deep structure
+    metrics_root = report_data.get("metrics", {})
+    
+    # Flexible handling: searches the root or inside internal test dictionaries
+    dataset_drifted = metrics_root.get("dataset_drift", False)
+    if not isinstance(dataset_drifted, bool): 
+        # If it is a complex Evidently dictionary, fetches the internal boolean value
+        dataset_drifted = metrics_root.get("dataset_drift", {}).get("value", {}).get("dataset_drift", False)
 
-    print(
-        f"📊 [Airflow] Proportion of columns with drift: {drift_share * 100:.2f}%")
+    drift_share = metrics_root.get("share_of_drifted_columns", 0.0)
 
-    if dataset_drifted:
-        print(
-            "🚨 CRITICAL: Data Drift detected. Routing data to Human Curation Queue.")
+    print(f"📊 [Airflow] Share of drifted columns: {drift_share * 100:.2f}%")
+    print(f"🎯 [Airflow] Final evaluated Data Drift result: {dataset_drifted}")
+
+    if str(dataset_drifted).lower() == 'true' or dataset_drifted is True:
+        print("🚨 CRITICAL: Data Drift detected. Routing to Human Curation Queue (Labelme).")
         return 'generate_pseudo_labels'
     else:
         print("✅ STABLE: Data is under control. Current model kept in serving.")
         return 'stop_pipeline'
-
 
 with DAG(
     'corrosion_phase1_monitoring',

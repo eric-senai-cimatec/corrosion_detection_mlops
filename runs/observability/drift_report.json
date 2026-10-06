@@ -1,6 +1,6 @@
 {
     "metrics": {
-        "dataset_drift": false,
-        "share_of_drifted_columns": 0.1667
+        "dataset_drift": true,
+        "share_of_drifted_columns": 0.8333
     }
 }

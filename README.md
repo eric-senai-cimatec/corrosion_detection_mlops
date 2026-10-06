@@ -4,96 +4,125 @@ A corrosion detection solution using AI and MLOps.
 
 ---
 
-## 📹 Fase 1: Coleta em Tempo Real & Servimento Dinâmico
+## 🛠️ Virtual Environment & Dedicated Setup (`uv`)
 
-Esta fase inicializa a aplicação de produção. O servidor FastAPI localiza autonomamente o modelo `@champion` no banco SQLite. O cliente OpenCV captura o stream da webcam e usa um pool de threads em segundo plano para enviar frames, filtrando e salvando capturas em `online_data/` apenas se houver detecção acima de **0.30 de confiança**.
+To guarantee total compatibility between Apache Airflow components and Computer Vision libraries, this project utilizes the high-performance package manager `uv`, locking the environment to a stable Python 3.11 interpreter.
 
-Para testar o servimento, abra **dois terminais separados** na raiz do projeto:
+```bash
+# 1. Ensure you are in the project root directory and create an isolated venv in Python 3.11
+uv venv --clear --python 3.11
+
+# 2. Activate the created virtual environment
+source .venv/bin/activate
+
+# 3. Update the core ecosystem and install project dependencies
+uv pip install -U apache-airflow
+uv pip install --upgrade werkzeug
+```
+
+---
+
+## 📹 Phase 1: Real-Time Data Collection & Dynamic Serving
+
+This initial phase boots up the production application. The local FastAPI server autonomously locates the active `@champion` model weights inside the SQLite database. The OpenCV client captures the webcam stream and uses a background thread pool to dispatch frames, filtering and saving captures into the `online_data/` directory only when detections score above a **0.30 confidence threshold**.
+
+To test inference serving, open **two separate terminals** at the root of the project:
 
 ### Terminal 1
-*Inicializa o servidor FastAPI e carrega o modelo `@champion` ativo:*
+*Initializes the FastAPI server and loads the live `@champion` model:*
 ```bash
 python src/serving/app.py
 ```
 
 ### Terminal 2
-*Inicializa a captura da webcam com processamento assíncrono em background:*
+*Starts the webcam stream capture powered by asynchronous background processing:*
 ```bash
 python src/serving/client_webcam.py
 ```
-*💡 Dica: Aponte a webcam para focar em cenários de teste com corrosão. Quando o terminal indicar que os frames foram gerados e salvos em `online_data/`, pressione a tecla **'q'** na janela de vídeo para encerrar.*
+*💡 Hint: Point your webcam to focus on metallic corrosion test scenarios. Once the terminal indicates that frames have been generated and flushed to `online_data/`, press the **'q'** key on the video window to quit.*
 
 ---
 
-## 🧭 Fase 2: Monitoramento & Orquestração Automatizada (Apache Airflow - Parte I)
+## 🧭 Phase 2: Monitoring & Automated Orchestration (Apache Airflow 3.0+ - Part I)
 
-Com os dados de produção capturados na pasta `online_data/`, o Apache Airflow assume o papel de maestro. O monitoramento calcula se houve desvio estatístico (*Data Drift*) nas propriedades de brilho, contraste e cor das novas imagens utilizando o **Evidently AI**.
+With live production data saved inside the `online_data/` folder, Apache Airflow steps in as the main orchestrator. The monitoring phase runs statistical evaluations to check for brightness, contrast, and color shifts across new frames using **Evidently AI**.
 
-### Passo 1: Inicializar o Ambiente do Airflow
-Antes de rodar a esteira, garanta que o seu servidor local do Apache Airflow esteja de pé e com as DAGs cadastradas:
+### Step 1: Initialize the Airflow Physical Structure
+Create the execution directory and dispatch your DAG files to the orchestrator's native tracking path:
 ```bash
-# Inicializa o webserver e o scheduler do Airflow
-airflow db init
-airflow users create --username admin --firstname Eric --lastname Santos --email admin@mlops.com --role Admin --password admin
-airflow webserver --port 8080
-airflow scheduler
+# Ensure the standard Airflow home folder and dags sub-folder exist on your home path
+mkdir -p ~/airflow/dags
+
+# Copy the structured pipeline files from the repository to the orchestrator's active scan directory
+cp dags/*.py ~/airflow/dags/
+
+# Migrate and initialize the metadata backend database
+airflow db migrate
 ```
-*💡 Acesse a interface web em `http://localhost:8080` com as credenciais criadas.*
 
-### Passo 2: Executar a DAG 1 (Monitoramento)
-A primeira DAG (`corrosion_phase1_monitoring`) executa a análise de drift e decide os próximos passos:
-1. Roda o script de observabilidade: `python -m src.observability.monitor`.
-2. Se o desvio atingir o limite crítico, o `BranchPythonOperator` dispara o script de Active Learning (`python -m src.data_automation.send_to_review`), gerando as pré-anotações automáticas e deixando os arquivos em `review_data/`.
-3. Se não houver drift, o pipeline encerra de forma limpa na própria interface do Airflow para poupar processamento.
+### Step 2: Initialize Web UI and Motors (3-Terminal Architecture)
+Airflow 3.0+ strictly isolates the DAG reading worker loop into a decoupled processor. Open **three additional parallel terminals** with the virtual environment active (`source .venv/bin/activate`):
+
+*   **Terminal A (Processor):** `airflow dag-processor`
+*   **Terminal B (Scheduler):** `airflow scheduler`
+*   **Terminal C (Web Dashboard):** `airflow api-server --port 8080`
+
+*💡 Access the modern web interface at `http://localhost:8080/dags` using the username `admin` and the temporary password auto-generated inside Terminal C's startup logs.*
+
+### Step 3: Run DAG 1 (Monitoring & Observability)
+The first pipeline (`corrosion_phase1_monitoring`) computes data drift metrics and dynamically branches out decisions:
+1. Triggers the observability job: `python -m src.observability.monitor` (Injecting the absolute repository path inside the `PYTHONPATH` system environment variable).
+2. If the calculated shift breaks past the critical threshold, a `BranchPythonOperator` fires an Active Learning script (`python -m src.data_automation.send_to_review`), creating pseudo-annotations automatically and pushing files to `review_data/`.
+3. If data is healthy and under control, the execution pipeline finishes cleanly inside the Airflow board to save compute cycles.
 
 ---
 
-## 🎨 Fase 3: Curadoria Humana & Active Learning (Human-in-the-Loop)
+## 🎨 Phase 3: Human Curation & Active Learning (Human-in-the-Loop)
 
-Caso o Airflow tenha detectado Drift na fase anterior, as novas imagens com defeito estarão aguardando a sua revisão humana na pasta `review_data/` acompanhadas de pré-anotações inteligentes em JSON geradas pelo modelo campeão.
+If a Data Drift alert was triggered during the previous phase, the flagged flawed images will be sitting inside the `review_data/` directory, enriched with high-quality AI pseudo-boxes pre-labeled by the current champion model.
 
 ```bash
-# 1. Abre a interface gráfica do Labelme apontando para a fila de revisão humana
+# 1. Launch the Labelme graphical UI pointing directly to the human evaluation queue
 labelme review_data
 
-# 2. Quando terminar de corrigir/aprovar os boxes e clicar em salvar, execute o conversor:
+# 2. Once you finish fine-tuning/approving bounding boxes and hit save, run the automation converter:
 python -m src.data_automation.parse_review_to_train
 ```
-*💥 MÁGICA DE MLOps:* O script `parse_review_to_train.py` traduzirá os JSONs para arquivos `.txt` padrão YOLO, mesclará tudo com a sua base oficial de treino, limpará as pastas e **disparará de forma 100% automatizada um Webhook (API REST HTTP) que acorda a segunda DAG do Airflow** para processar o retreino, sem necessidade de intervenção humana no painel do orquestrador.
+*💥 MLOps MAGIC:* The `parse_review_to_train.py` parser script translates the updated JSON structures into standard YOLO `.txt` files, merges them with your baseline training set, cleans up old staging directories, and **automatically hits a custom Webhook (REST HTTP API) waking up Airflow's Phase 2 DAG**, completely bypassing manual clicks on the orchestration board.
 
 ---
 
-## 🏆 Fase 4: Sincronização, Retreino & Atualização Viva (Apache Airflow - Parte II)
+## 🏆 Phase 4: Syncing, Retraining & Live Hot Reloads (Apache Airflow 3.0+ - Part II)
 
-A segunda DAG (`corrosion_phase2_retrain`) acorda imediatamente após o recebimento do sinal HTTP disparado pelo seu script de curadoria. Ela gerencia de ponta a ponta as tarefas pesadas de computação, governança e implantação contínua:
+The secondary pipeline (`corrosion_phase2_retrain`) wakes up immediately after receiving the incoming automated HTTP request kicked off by the data curation stage. It automates heavy computing tasks, strict asset governance, and continuous deployment:
 
-### 4.1 Versionamento de Dados (DVC)
-*O Airflow executa automaticamente o isolamento das novas assinaturas imutáveis dos dados na nuvem:*
+### 4.1 Data Version Control (DVC)
+*Airflow updates data hashes and pushes immutable datasets to cloud storage automatically:*
 ```bash
-# Atualiza o hash MD5 da pasta 'data' localmente no arquivo data.dvc e envia para o Google Drive
+# Computes the MD5 checksum of the expanded data/ directory, updating data.dvc, and uploads data to Google Drive
 dvc add data
 dvc push
 
-# Registra as alterações do ponteiro do DVC no controle de versão do histórico do Git
+# Tracks the new pointers and snapshots inside Git's file history tree
 git add data.dvc
-git commit -m "chore: adiciona novos frames de corrosao reais ao dataset de treino via pipeline"
+git commit -m "chore: inject new verified web-cam corrosion frames into training pool via pipeline"
 ```
 
-### 4.2 Treinamento, Governança Estrita & Deploy Contínuo (MLflow)
-*O Airflow dispara o ciclo de modelagem, avalia os resultados em relação ao campeão atual e atualiza a API em produção de forma viva:*
+### 4.2 Training, Governance & Continuous Deployment (MLflow)
+*The pipeline triggers a training run, subjects results to multi-metric validation against the active champion, and updates production servers live:*
 ```bash
-# 1. Inicia o treinamento do YOLO no Windows lendo as configurações do model_config.yaml
+# 1. Launches YOLO model training sessions natively by loading hyperparameters from model_config.yaml
 python -m src.model_train.yolo
 
-# 2. Executa a validação no split de teste filtrando as pastas pelo relógio do sistema (getmtime)
-# Aplica as travas de negócio multi-métrica (mAP50 > 50% & Recall > 40%) contra o Champion atual
+# 2. Processes verification loops over test splits while tracking model registrations via MLflow
+# Enforces multi-metric gate criteria checking business metrics (mAP50 > 50% & Recall > 40%) against the current champion
 python -m src.model_eval.yolo
 
-# 3. CD (Continuous Deployment): Envia um sinal HTTP de recarregamento para o servidor de produção
-# A sua API FastAPI atualiza os pesos da memória em tempo real SEM DERRUBAR o sistema!
+# 3. CD (Continuous Deployment): Fires a hot-reload HTTP POST request straight into production endpoints
+# The live FastAPI instance safely updates its loaded in-memory weights with ZERO DOWNTIME!
 curl -X POST http://127.0.0
 
-# 4. Inicia o painel gráfico do MLflow para auditoria e histórico de execuções
+# 4. Spins up the MLflow Tracking Server UI for model provenance and historical experiment audit runs
 mlflow ui --backend-store-uri sqlite:///mlflow.db
 ```
-*💡 Nota: Acesse `http://127.0.0.1:5000` no seu navegador para verificar as tabelas comparativas das Runs e confirmar graficamente que a nova versão assumiu a etiqueta de **`champion`**.*
+*💡 Note: Navigate to `http://127.0.0.1:5000` to review comparison charts, track model runs, and see your updated package take over the **`champion`** alias status tag.*

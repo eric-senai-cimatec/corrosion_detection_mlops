@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 class WebcamServingClient:
-    """Classe responsável por gerenciar a captura de frames da webcam e o desenho de Bounding Boxes em tempo real."""
+    """Class responsible for managing webcam frame capture and drawing Bounding Boxes in real time."""
 
     def __init__(self, api_url: str, check_interval: float = 0.5):
         self.api_url = api_url
@@ -21,7 +21,7 @@ class WebcamServingClient:
         self.is_sending = False
         self.executor = ThreadPoolExecutor(max_workers=2)
 
-        # [NOVO] Mantém o histórico das últimas detecções para desenhar na tela de forma assíncrona
+        # [NEW] Keeps track of the latest detections to draw on screen asynchronously
         self.current_detections = []
 
     def _send_frame_to_api(self, frame, timestamp: str):
@@ -37,21 +37,21 @@ class WebcamServingClient:
             if response.status_code == 200:
                 data = response.json()
 
-                # [NOVO] Atualiza as coordenadas das caixas que serão desenhadas no loop principal
+                # [NEW] Updates the bounding box coordinates to be drawn in the main loop
                 self.current_detections = data.get("detections", [])
 
                 if data.get("has_detections"):
                     filename = f"rust_{timestamp}.png"
                     filepath = os.path.join(self.online_data_dir, filename)
 
-                    # Salva SEMPRE a imagem crua/limpa no online_data para o Active Learning
+                    # ALWAYS saves the raw/clean image in online_data for Active Learning
                     cv2.imwrite(filepath, frame)
                     print(
-                        f"📸 [Active Learning] Corrosão localizada! Salvo em: online_data/{filename} ({data['count']} focos)")
+                        f"📸 [Active Learning] Corrosion detected! Saved to: online_data/{filename} ({data['count']} targets)")
             else:
                 self.current_detections = []
         except Exception as e:
-            print(f"⚠️ [Conexão] Falha ao se comunicar com a API: {e}")
+            print(f"⚠️ [Connection] Failed to communicate with the API: {e}")
             self.current_detections = []
         finally:
             self.is_sending = False
@@ -59,11 +59,11 @@ class WebcamServingClient:
     def start_monitoring(self):
         cap = cv2.VideoCapture(0)
         if not cap.isOpened():
-            print("❌ Erro: Não foi possível acessar a webcam.")
+            print("❌ Error: Could not access the webcam.")
             return
 
         print("\n" + "-" * 60)
-        print("📹 Monitoramento da Webcam Iniciado! Pressione 'q' para fechar.")
+        print("📹 Webcam Monitoring Started! Press 'q' to exit.")
         print("-" * 60)
 
         last_check_time = time.time()
@@ -76,7 +76,7 @@ class WebcamServingClient:
 
                 current_time = time.time()
 
-                # Dispara a verificação em background
+                # Triggers background API verification
                 if (current_time - last_check_time > self.check_interval) and not self.is_sending:
                     self.is_sending = True
                     last_check_time = current_time
@@ -84,27 +84,27 @@ class WebcamServingClient:
                     self.executor.submit(
                         self._send_frame_to_api, frame.copy(), timestamp)
 
-                # [NOVO] DESENHA AS BOUNDING BOXES DINAMICAMENTE NA TELA DE VISUALIZAÇÃO
+                # [NEW] DRAWS THE BOUNDING BOXES DYNAMICALLY ON THE PREVIEW SCREEN
                 for det in self.current_detections:
-                    bbox = det.get("bbox")  # Pega [x1, y1, x2, y2]
+                    bbox = det.get("bbox")  # Gets [x1, y1, x2, y2]
                     label = det.get("label")
                     conf = det.get("confidence")
 
                     if bbox and len(bbox) == 4:
                         x1, y1, x2, y2 = map(int, bbox)
 
-                        # Desenha o retângulo da falha (Verde)
+                        # Draws the defect bounding box (Green)
                         cv2.rectangle(frame, (x1, y1),
                                       (x2, y2), (0, 255, 0), 2)
 
-                        # Escreve o texto com a classe e a confiança em cima da caixa
+                        # Writes the class label and confidence score text above the box
                         text = f"{label} {conf:.2f}"
                         cv2.putText(frame, text, (x1, y1 - 10),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-                # Renderiza a janela com o vídeo contínuo e as caixas atualizadas
+                # Renders the window with continuous video and updated boxes
                 cv2.imshow(
-                    "Inspeção de Corrosão em Tempo Real - MLOps Client", frame)
+                    "Real-Time Corrosion Inspection - MLOps Client", frame)
 
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
@@ -112,14 +112,14 @@ class WebcamServingClient:
             cap.release()
             cv2.destroyAllWindows()
             self.executor.shutdown(wait=False)
-            print("📹 Captura encerrada de forma limpa pelo usuário.")
+            print("📹 Capture closed cleanly by the user.")
 
 
 def main():
-    # URL correta apontando para o endpoint da sua API FastAPI local
+    # Correct URL pointing to your local FastAPI endpoint
     API_URL = "http://127.0.0.1:8000/predict"
 
-    # Instancia o cliente configurando amostragem de envio a cada 0.5 segundos
+    # Instantiates the client, configuring transmission sampling every 0.5 seconds
     client = WebcamServingClient(api_url=API_URL, check_interval=0.5)
     client.start_monitoring()
 

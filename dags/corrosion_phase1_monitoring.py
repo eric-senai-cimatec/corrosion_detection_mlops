@@ -23,7 +23,7 @@ def check_drift_and_decide():
                              "observability", "drift_report.json")
 
     if not os.path.exists(json_path):
-        print(f"⚠️ Arquivo {json_path} nao localizado. Abortando fluxo.")
+        print(f"⚠️ File {json_path} not found. Aborting pipeline flow.")
         return 'stop_pipeline'
 
     with open(json_path, 'r') as f:
@@ -35,27 +35,27 @@ def check_drift_and_decide():
         "share_of_drifted_columns", 0.0)
 
     print(
-        f"📊 [Airflow] Proporcao de colunas com desvio: {drift_share * 100:.2f}%")
+        f"📊 [Airflow] Proportion of columns with drift: {drift_share * 100:.2f}%")
 
     if dataset_drifted:
         print(
-            "🚨 CRÍTICO: Data Drift detectado. Encaminhando para Fila de Curadoria Humana.")
+            "🚨 CRITICAL: Data Drift detected. Routing data to Human Curation Queue.")
         return 'generate_pseudo_labels'
     else:
-        print("✅ ESTÁVEL: Dados sob controle. Modelo atual mantido em servimento.")
+        print("✅ STABLE: Data is under control. Current model kept in serving.")
         return 'stop_pipeline'
 
 
 with DAG(
     'corrosion_phase1_monitoring',
     default_args=default_args,
-    description='Fase 1 MLOps: Roda Observabilidade e prepara dados para o Labelme se houver Drift',
-    schedule='0 8 * * *',  # Executa programado todos os dias as 08:00 da manha
+    description='Phase 1 MLOps: Runs Observability and prepares data for Labelme if Drift is present',
+    schedule='0 8 * * *',  # Scheduled to run every day at 08:00 AM
     catchup=False,
     tags=['mlops', 'observability', 'corrosion']
 ) as dag:
 
-    # 1. Calcula o Data Drift com o Evidently AI comparando a webcam com a base de treino
+    # 1. Calculates Data Drift using Evidently AI, comparing webcam data against the training baseline
     task_run_observability = BashOperator(
         task_id='run_observability_monitor',
         bash_command="/home/eric/projects/corrosion_detection_mlops/.venv/bin/python -m src.observability.monitor",
@@ -65,19 +65,19 @@ with DAG(
         cwd=PROJECT_ROOT
     )
 
-    # 2. Avalia a condicional baseada no JSON gerado
+    # 2. Evaluates the condition based on the generated JSON file
     task_verify_drift = BranchPythonOperator(
         task_id='verify_drift_trigger',
         python_callable=check_drift_and_decide
     )
 
-    # Caminho A: Dataset saudavel, encerra o ciclo de forma limpa
+    # Path A: Healthy dataset, terminates the pipeline cleanly
     task_stop_pipeline = BashOperator(
         task_id='stop_pipeline',
-        bash_command='echo "Pipeline finalizado: nenhuma acao de retreino necessaria hoje."'
+        bash_command='echo "Pipeline finished: no retraining action required today."'
     )
 
-    # Caminho B: Cria os JSONs estruturados de pseudo-anotacao na pasta review_data/
+    # Path B: Creates structured pseudo-annotation JSON files inside the review_data/ folder
     task_generate_pseudo_labels = BashOperator(
         task_id='generate_pseudo_labels',
         bash_command="/home/eric/projects/corrosion_detection_mlops/.venv/bin/python -m src.data_automation.send_to_review",
@@ -87,6 +87,6 @@ with DAG(
         cwd=PROJECT_ROOT
     )
 
-    # Dependências do Grafo da Fase 1
+    # Phase 1 Graph Dependencies
     task_run_observability >> task_verify_drift
     task_verify_drift >> [task_stop_pipeline, task_generate_pseudo_labels]

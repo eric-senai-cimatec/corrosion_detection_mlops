@@ -120,7 +120,7 @@ python -m src.model_eval.yolo
 
 # 3. CD (Continuous Deployment): Fires a hot-reload HTTP POST request straight into production endpoints
 # The live FastAPI instance safely updates its loaded in-memory weights with ZERO DOWNTIME!
-curl -X POST http://127.0.0
+curl -X POST http://127.0.0.1:8000/reload
 
 # 4. Spins up the MLflow Tracking Server UI for model provenance and historical experiment audit runs
 mlflow ui --backend-store-uri sqlite:///mlflow.db

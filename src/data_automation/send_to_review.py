@@ -14,7 +14,7 @@ ONLINE_DATA_DIR = os.path.join(PROJECT_ROOT, "online_data")
 REVIEW_DIR = os.path.join(PROJECT_ROOT, "review_data")
 os.makedirs(REVIEW_DIR, exist_ok=True)
 
-# 1. Carrega o modelo Champion
+# 1. Loads the Champion model
 client = MlflowClient()
 model_metadata = client.get_model_version_by_alias(
     "Corrosion_Detection_YOLO_Model", "champion")
@@ -22,7 +22,7 @@ clean_path = model_metadata.source.replace(
     "file|///", "").replace("file:///", "").replace("|", "")
 model = YOLO(os.path.normpath(clean_path))
 
-# 2. Varre as imagens online
+# 2. Scans online images
 valid_extensions = ('.jpg', '.jpeg', '.png')
 images = [f for f in os.listdir(ONLINE_DATA_DIR)
           if f.lower().endswith(valid_extensions)]
@@ -30,25 +30,25 @@ images = [f for f in os.listdir(ONLINE_DATA_DIR)
 for img_name in images:
     img_path = os.path.join(ONLINE_DATA_DIR, img_name)
 
-    # Roda a inferência do YOLO
-    results = model.predict(source=img_path, conf=0.25)[0]
+    # Runs YOLO inference
+    results = model.predict(source=img_path, conf=0.30)[0]
 
-    # Carrega dimensões reais da imagem para o JSON do Labelme
+    # Loads actual image dimensions for the Labelme JSON
     img_bgr = cv2.imread(img_path)
     h, w, _ = img_bgr.shape
 
-    # Estrutura base do arquivo JSON oficial do Labelme
+    # Base structure of the official Labelme JSON file
     labelme_json = {
         "version": "5.0.1",
         "flags": {},
         "shapes": [],
         "imagePath": img_name,
-        "imageData": None,  # Deixar None força o Labelme a ler o arquivo de imagem local ao lado
+        "imageData": None,  # Leaving None forces Labelme to read the local image file alongside it
         "imageHeight": h,
         "imageWidth": w
     }
 
-    # Converte os boxes do YOLO para o formato de pontos do Labelme [[x1, y1], [x2, y2]]
+    # Converts YOLO bounding boxes to Labelme points format [[x1, y1], [x2, y2]]
     for box in results.boxes:
         coords = box.xyxy[0].tolist()  # [x1, y1, x2, y2]
         cls_id = int(box.cls[0].item())
@@ -57,8 +57,8 @@ for img_name in images:
         shape = {
             "label": label_name,
             "points": [
-                [coords[0], coords[1]],  # Canto superior esquerdo
-                [coords[2], coords[3]]  # Canto inferior direito
+                [coords[0], coords[1]],  # Top-left corner
+                [coords[2], coords[3]]   # Bottom-right corner
             ],
             "group_id": None,
             "shape_type": "rectangle",
@@ -66,14 +66,14 @@ for img_name in images:
         }
         labelme_json["shapes"].append(shape)
 
-    # Salva a imagem e o JSON de pré-anotação na pasta de revisão humana
+    # Saves the image and the pre-annotation JSON to the human review folder
     shutil.copy2(img_path, os.path.join(REVIEW_DIR, img_name))
     json_path = os.path.join(
         REVIEW_DIR, os.path.splitext(img_name)[0] + ".json")
     with open(json_path, "w") as f:
         json.dump(labelme_json, f, indent=2)
 
-    # Limpa a pasta temporária original
+    # Cleans up the original temporary folder
     os.remove(img_path)
 
-print(f"📥 {len(images)} imagens enviadas com pré-anotações automáticas para: {REVIEW_DIR}")
+print(f"📥 {len(images)} images sent with automatic pre-annotations to: {REVIEW_DIR}")

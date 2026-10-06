@@ -8,15 +8,15 @@ import numpy as np
 from ultralytics import YOLO
 from mlflow import MlflowClient
 
-# 1. Configuração do ambiente e banco do MLflow
+# 1. Environment configuration and MLflow database setup
 PROJECT_ROOT = os.path.abspath(os.path.join(
     os.path.dirname(__file__), "..", ".."))
 os.environ["MLFLOW_TRACKING_URI"] = f"sqlite:///{os.path.join(PROJECT_ROOT, 'mlflow.db')}"
 
 
 def load_champion_model() -> YOLO:
-    """Busca dinamicamente o modelo champion no banco SQLite e limpa a URL do Windows"""
-    print("🔍 [MLflow] Buscando o modelo 'champion' no Model Registry...")
+    """Dynamically fetches the champion model from the SQLite database and sanitizes the Windows URL."""
+    print("🔍 [MLflow] Searching for the 'champion' model in the Model Registry...")
     try:
         client = MlflowClient()
         model_metadata = client.get_model_version_by_alias(
@@ -24,13 +24,11 @@ def load_champion_model() -> YOLO:
             alias="champion"
         )
 
-        # Extração segura do Run ID para montar o caminho físico do Windows
+        # Safe extraction of Run ID to build the physical Windows path
         raw_source = model_metadata.source
         run_id_match = re.search(r'([a-f0-9]{32})', raw_source)
-
         if not run_id_match:
-            raise ValueError(
-                f"Run ID inválido no metadado do modelo: {raw_source}")
+            raise ValueError(f"Invalid Run ID in model metadata: {raw_source}")
 
         run_id = run_id_match.group(1)
         model_path = os.path.normpath(os.path.join(
@@ -39,69 +37,70 @@ def load_champion_model() -> YOLO:
 
         if not os.path.exists(model_path):
             raise FileNotFoundError(
-                f"Arquivo físico do modelo não encontrado em: {model_path}")
+                f"Physical model file not found at: {model_path}")
 
         print(
-            f"✅ [MLflow] Modelo carregado com sucesso da pasta: {model_path}")
+            f"✅ [MLflow] Model successfully loaded from folder: {model_path}")
         return YOLO(model_path)
 
     except Exception as e:
-        print(f"❌ [Erro] Falha ao carregar modelo do Registry: {e}")
-        print("⚠️ Certifique-se de que o mlflow.db está populado e o alias 'champion' está configurado.")
+        print(f"❌ [Error] Failed to load model from Registry: {e}")
+        print("⚠️ Make sure mlflow.db is populated and the 'champion' alias is configured.")
         raise RuntimeError(e)
 
 
 @asynccontextmanager
 async def lifespan(fastapi_app: FastAPI):
-    """Gerencia o ciclo de vida da aplicação (Startup e Shutdown) armazenando o estado de forma limpa."""
+    """Manages the application lifecycle (Startup and Shutdown), storing the state cleanly."""
     try:
-        # Armazena a instância do modelo dentro do estado controlado do FastAPI
+        # Stores the model instance inside the controlled FastAPI state
         fastapi_app.state.model = load_champion_model()
     except Exception:
         fastapi_app.state.model = None
-
     yield
-    # Recursos podem ser limpos aqui no shutdown se necessário
-    print("🔌 Encerrando o servidor de aplicação.")
+    # Resources can be cleaned up here during shutdown if needed
+    print("🔌 Shutting down the application server.")
 
-
-# Inicializa o FastAPI acoplando o gerenciador de ciclo de vida
+# Initializes FastAPI by attaching the lifecycle manager
 app = FastAPI(
     title="Automated Corrosion Detection API",
-    description="API para detecção dinâmica de corrosão usando o modelo @champion do MLflow",
+    description="API for dynamic corrosion detection using MLflow's @champion model",
     version="3.0.0",
     lifespan=lifespan
 )
 
 
-@app.post("/predict", summary="Inferência em tempo real para detecção de corrosão")
+@app.post("/predict", summary="Real-time inference for corrosion detection")
 async def predict(request: Request, file: UploadFile = File(...)):
-    # Recupera o modelo de forma segura de dentro do estado da requisição atual
+    # Safely retrieves the model from the current request state
     model: YOLO = request.app.state.model
-
     if model is None:
         raise HTTPException(
-            status_code=503, detail="Modelo preditivo indisponível ou não inicializado no servidor.")
+            status_code=503,
+            detail="Predictive model unavailable or not initialized on the server."
+        )
 
-    # Validação do tipo de arquivo enviado
+    # Validation of the uploaded file type
     if not file.content_type.startswith("image/"):
         raise HTTPException(
-            status_code=400, detail="O arquivo enviado precisa ser uma imagem válida.")
+            status_code=400,
+            detail="The uploaded file must be a valid image."
+        )
 
     try:
-        # Lê os bytes do arquivo recebido via HTTP e converte para formato OpenCV (BGR)
+        # Reads bytes from the received HTTP file and converts them to OpenCV (BGR) format
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
         if img is None:
-            raise ValueError("Falha ao decodificar a imagem recebida.")
+            raise ValueError("Failed to decode the received image.")
 
-        # Executa a inferência na imagem isolando o primeiro resultado
+        # Executes inference on the image, isolating the first result
         results = model.predict(source=img, conf=0.30, verbose=False)[0]
-
         detections = []
-        # Extrai os metadados das caixas encontradas
+
+        # Extracts metadata from the detected bounding boxes
         for box in results.boxes:
             coords = box.xyxy[0].tolist()  # [x1, y1, x2, y2]
             conf = float(box.conf[0].item())
@@ -122,19 +121,23 @@ async def predict(request: Request, file: UploadFile = File(...)):
 
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Erro interno no processamento: {str(e)}")
+            status_code=500,
+            detail=f"Internal processing error: {str(e)}"
+        )
 
 
-@app.post("/reload", summary="Atualiza o modelo em produção sem derrubar a API")
+@app.post("/reload", summary="Updates the production model without downing the API")
 def reload_model(request: Request):
-    """Endpoint administrativo para recarregar o campeão atual de forma thread-safe"""
+    """Administrative endpoint to reload the current champion in a thread-safe manner"""
     try:
-        # Substitui a instância antiga no estado da aplicação pela nova versão promovida
+        # Replaces the old instance in the application state with the newly promoted version
         request.app.state.model = load_champion_model()
-        return {"status": "success", "message": "Modelo em produção atualizado dinamicamente!"}
+        return {"status": "success", "message": "Production model dynamically updated!"}
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Falha ao recarregar modelo: {str(e)}")
+            status_code=500,
+            detail=f"Failed to reload model: {str(e)}"
+        )
 
 
 if __name__ == "__main__":

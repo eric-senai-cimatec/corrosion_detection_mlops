@@ -5,8 +5,12 @@ import mlflow
 from mlflow import MlflowClient
 from helper.config import load_config
 import yaml
+import warnings
 
-# 1. Configura os caminhos antes de fazer os imports customizados
+# Silences MLflow API deprecation warnings from legacy modules
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+# 1. Configures the paths before making any custom imports
 current_dir = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.abspath(os.path.join(current_dir, "..", ".."))
 
@@ -15,19 +19,20 @@ if PROJECT_ROOT not in sys.path:
 
 
 def main():
-    # Configuração do banco de dados na raiz do projeto
+    # Database configuration at the project root
     os.environ["MLFLOW_TRACKING_URI"] = f"sqlite:///{os.path.join(PROJECT_ROOT, 'mlflow.db')}"
     os.environ["MLFLOW_EXPERIMENT_NAME"] = "Corrosion_Detection_YOLO"
 
     settings.update({"mlflow": True})
 
-    # 1. Carrega o caminho do dataset (apenas o data_path continua vindo do config/yaml)
-    data_path = load_config('data_path')
-
-    # 2. LOCALIZAÇÃO AUTOMÁTICA E DINÂMICA DO ÚLTIMO MODELO TREINADO
+    # 1. Loads the dataset path (only data_path continues to come from config/yaml)
+    config = load_config('data/data.yaml')
+    data_path = config['path']
+    
+    # 2. AUTOMATIC AND DYNAMIC LOCATION OF THE LATEST TRAINED MODEL
     base_detect_dir = os.path.join(PROJECT_ROOT, "runs", "detect")
 
-    # Lista APENAS pastas de treinos reais, ignorando validações (val) e predições (predict)
+    # Lists ONLY actual training folders, ignoring validations (val) and predictions (predict)
     all_train_folders = [
         os.path.join(base_detect_dir, d)
         for d in os.listdir(base_detect_dir)
@@ -38,40 +43,39 @@ def main():
 
     if not all_train_folders:
         raise FileNotFoundError(
-            f"❌ Nenhuma pasta de treinamento válida encontrada em: {base_detect_dir}")
+            f"❌ No valid training folder found at: {base_detect_dir}")
 
-    # Encontra a pasta de treino modificada por último pelo sistema operacional
+    # Finds the training folder modified last by the operating system
     latest_train_folder = max(all_train_folders, key=os.path.getmtime)
 
-    # Monta o caminho definitivo para o peso 'best.pt'
+    # Builds the final path to the 'best.pt' weights file
     model_path = os.path.normpath(os.path.join(
         latest_train_folder, "weights", "best.pt"))
 
     if not os.path.exists(model_path):
         raise FileNotFoundError(
-            f"❌ O arquivo de pesos 'best.pt' nao foi encontrado em: {model_path}")
+            f"❌ The weights file 'best.pt' was not found at: {model_path}")
 
-    print(f"📦 [Automação] Último treino localizado: {latest_train_folder}")
-    print(
-        f"🎯 [Automação] Carregando pesos para avaliação de teste: {model_path}")
+    print(f"📦 [Automation] Latest training located: {latest_train_folder}")
+    print(f"🎯 [Automation] Loading weights for test set evaluation: {model_path}")
 
-    # Carregar o modelo treinado de forma totalmente dinâmica
+    # Loads the trained model dynamically
     model = YOLO(model_path)
 
-    # Inicia a run exclusiva para o teste
+    # Starts the exclusive run for testing
     with mlflow.start_run(run_name="evaluation_test_set") as run:
 
-        # Adiciona Tags estruturais para a Run
+        # Adds structural tags to the Run
         mlflow.set_tag("pipeline_stage", "testing")
         mlflow.log_param("evaluated_model_path", model_path)
 
-        # Executa a avaliação no split de teste
+        # Executes the evaluation on the test split
         metrics = model.val(
             data=data_path,
             split='test'
         )
 
-        # Converte métricas do YOLO para float nativo
+        # Converts YOLO metrics to native float
         current_recall = float(metrics.box.r[0]) if hasattr(
             metrics.box.r, "__len__") else float(metrics.box.r)
         current_precision = float(metrics.box.p[0]) if hasattr(
@@ -79,7 +83,7 @@ def main():
         current_mAP50 = float(metrics.box.map50)
         current_mAP50_95 = float(metrics.box.map)
 
-        # Loga no MLflow Tracking
+        # Logs to MLflow Tracking
         mlflow.log_metrics({
             "metrics_recall": current_recall,
             "metrics_precision": current_precision,
@@ -87,98 +91,71 @@ def main():
             "metrics_mAP50_95": current_mAP50_95
         })
 
-        # Salva o arquivo físico do peso como artefato da Run
+        # Saves the physical weights file as a Run artifact
         model_filename = os.path.basename(model_path)
         mlflow.log_artifact(model_path, artifact_path="yolo_weights")
 
-        # Registra oficialmente esse modelo no catálogo central do MLflow
-        local_artifact_uri = f"file:///{os.path.join(run.info.artifact_uri, 'yolo_weights', model_filename)}"
+        # Officially registers this model in the MLflow Model Registry
+        local_artifact_uri = f"file://{os.path.abspath(os.path.join(run.info.artifact_uri, 'yolo_weights', model_filename))}"
         model_details = mlflow.register_model(
             local_artifact_uri, "Corrosion_Detection_YOLO_Model")
 
-        # ---- LÓGICA DE NEGÓCIO MULTI-MÉTRICA (CHAMPION VS CHALLENGER VS REJECT) ----
+        # ---- MULTI-METRIC BUSINESS LOGIC (CHAMPION VS CHALLENGER) ----
         client = MlflowClient()
+        model_name = "Corrosion_Detection_YOLO_Model"
+        
+        business_cfg = load_config('business_args.yaml')
+        MIN_MAP50 = float(business_cfg['MIN_MAP50'])
+        MIN_RECALL = float(business_cfg['MIN_RECALL'])
 
-        # Definição das Regras de Negócio Básicas (Thresholds)
-        MIN_MAP50 = 0.40   # Precisão mínima de localização
-        MIN_RECALL = 0.50  # Mínimo de taxa de captura de defeitos real
+        print("\n--- BUSINESS RULES VALIDATION ---")
+        print(f"Obtained Metrics -> mAP50: {current_mAP50:.4f} | Recall: {current_recall:.4f}")
 
-        print("\n--- VALIDAÇÃO DE REGRAS DE NEGÓCIO ---")
-        print(
-            f"Métricas obtidas -> mAP50: {current_mAP50:.4f} | Recall: {current_recall:.4f}")
-
-        # Filtro 1: Verificação de Limites Mínimos (Portão de Qualidade)
+        # 1. Check against baseline absolute thresholds
         if current_mAP50 < MIN_MAP50 or current_recall < MIN_RECALL:
-            print(
-                f"❌ Modelo REPROVADO nos requisitos mínimos (mAP50 Mín: {MIN_MAP50} / Recall Mín: {MIN_RECALL}).")
-            client.set_registered_model_alias(
-                name="Corrosion_Detection_YOLO_Model",
-                alias="rejected",
-                version=model_details.version
-            )
-        else:
-            # Filtro 2: Comparação multi-variável contra o Campeão atual
-            try:
-                champion_metadata = client.get_model_version_by_alias(
-                    name="Corrosion_Detection_YOLO_Model",
-                    alias="champion"
-                )
+            print("❌ REJECTED: Model did not meet the minimum business requirements.")
+            sys.exit(0)
+            
+        print("✅ Passed baseline requirements. Checking tournament against current Champion...")
 
-                champion_run = client.get_run(champion_metadata.run_id)
-                champion_mAP50 = float(
-                    champion_run.data.metrics.get("metrics_mAP50", 0.0))
-                champion_recall = float(
-                    champion_run.data.metrics.get("metrics_recall", 0.0))
-
-                print(
-                    f"Campeão atual (Versão {champion_metadata.version}) -> mAP50: {champion_mAP50:.4f} | Recall: {champion_recall:.4f}")
-
-                # Critério de Desempate: O modelo novo é melhor se possuir mAP50 superior E não reduzir o Recall,
-                # OU se trouxer um ganho substancial em Recall (foco em segurança) mantendo a estabilidade.
-                # Regra adotada: Média aritmética das duas métricas precisa ser estritamente superior.
-                current_score = (current_mAP50 + current_recall) / 2
-                champion_score = (champion_mAP50 + champion_recall) / 2
-
-                if current_score > champion_score:
-                    print(
-                        f"🏆 NOVO CAMPEÃO! Score geral superou o anterior ({current_score:.4f} > {champion_score:.4f}).")
-                    client.set_registered_model_alias(
-                        name="Corrosion_Detection_YOLO_Model",
-                        alias="champion",
-                        version=model_details.version
-                    )
+        # 2. Modern secure checkout using the MLflow Aliases system
+        try:
+            # Queries the registry for the registered version currently carrying the 'champion' tag
+            champion_version = client.get_model_version_by_alias(model_name, "champion")
+            
+            if champion_version and champion_version.run_id:
+                champion_run = client.get_run(champion_version.run_id)
+                champion_mAP50 = float(champion_run.data.metrics.get("metrics_mAP50", 0.0))
+                print(f"👑 Active Champion found! Version: {champion_version.version} | Champion mAP50: {champion_mAP50:.4f}")
+                
+                # Tournament condition: challenger must strictly outperform the champion
+                if current_mAP50 > champion_mAP50:
+                    print("🚀 CHALLENGER WINS! Reassigning 'champion' alias to the new model version.")
+                    client.set_registered_model_alias(model_name, "champion", model_details.version)
                 else:
-                    print(
-                        "⚔️ CHALLENGER! Modelo passou nos testes, mas score geral inferior ao campeão atual.")
-                    client.set_registered_model_alias(
-                        name="Corrosion_Detection_YOLO_Model",
-                        alias="challenger",
-                        version=model_details.version
-                    )
+                    print("📉 Challenger did not out-perform the current Champion. Keeping active model.")
+            else:
+                print("✨ No active Champion found with valid Run ID. Promoting current model to first Champion!")
+                client.set_registered_model_alias(model_name, "champion", model_details.version)
+                
+        except Exception:
+            # Fallback triggered when the database is fresh and the 'champion' alias does not exist yet
+            print("✨ No active Champion found in database. Promoting current model to first Champion!")
+            client.set_registered_model_alias(model_name, "champion", model_details.version)
 
-            except mlflow.exceptions.MlflowException:
-                # Primeiro modelo que cruza a linha de qualidade mínima vira campeão por padrão
-                print(
-                    "🥇 Primeiro modelo válido aprovado no projeto. Promovido automaticamente a champion!")
-                client.set_registered_model_alias(
-                    name="Corrosion_Detection_YOLO_Model",
-                    alias="champion",
-                    version=model_details.version
-                )
-
-        # ---- ATRIBUIÇÃO DE METADADOS ADICIONAIS (TAGS) ----
+        # ---- ADDITIONAL METADATA ATTRIBUTION (TAGS) ----
         client.set_registered_model_tag(
-            name="Corrosion_Detection_YOLO_Model",
+            name=model_name,
             key="framework",
             value="ultralytics-yolo"
         )
         client.set_registered_model_tag(
-            name="Corrosion_Detection_YOLO_Model",
+            name=model_name,
             key="task",
             value="corrosion-detection"
         )
 
-        # Vinculação da versão do Dataset via DVC
+        # Dataset version tracking via DVC
         dvc_file_path = os.path.join(PROJECT_ROOT, "data.dvc")
         dvc_hash = "unknown"
 
@@ -188,12 +165,10 @@ def main():
                 dvc_hash = dvc_data.get("outs", [{}])[0].get("md5", "unknown")
 
         client.set_registered_model_tag(
-            name="Corrosion_Detection_YOLO_Model",
+            name=model_name,
             key="dataset_version_md5",
             value=dvc_hash
         )
-
-    print("\nAvaliação de teste concluída e registrada com sucesso no MLflow!")
 
 
 if __name__ == '__main__':

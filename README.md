@@ -6,18 +6,23 @@ A corrosion detection solution using AI and MLOps.
 
 ## 🛠️ Virtual Environment & Dedicated Setup (`uv`)
 
-To guarantee total compatibility between Apache Airflow components and Computer Vision libraries, this project utilizes the high-performance package manager `uv`, locking the environment to a stable Python 3.11 interpreter.
+To guarantee total compatibility between Apache Airflow components, graphical tools, and Computer Vision libraries, this project utilizes the high-performance package manager `uv`, locking the environment to a stable Python 3.11 interpreter.
 
 ```bash
-# 1. Ensure you are in the project root directory and create an isolated venv in Python 3.11
+# 1. Install required Linux system graphics and X11 dependencies for WSL2 UI rendering
+sudo apt update && sudo apt install -y libxcb-xinerama0 libqt5gui5 libgles2-mesa-dev
+
+# 2. Ensure you are in the project root directory and create an isolated venv in Python 3.11
 uv venv --clear --python 3.11
 
-# 2. Activate the created virtual environment
+# 3. Activate the created virtual environment
 source .venv/bin/activate
 
-# 3. Update the core ecosystem and install project dependencies
+# 4. Update core ecosystem packages and install project dependencies
+# Note: opencv-python-headless prevents Qt library distribution conflicts with Labelme
 uv pip install -U apache-airflow
 uv pip install --upgrade werkzeug
+uv pip install opencv-python-headless labelme
 ```
 
 ---
@@ -82,8 +87,8 @@ The first pipeline (`corrosion_phase1_monitoring`) computes data drift metrics a
 If a Data Drift alert was triggered during the previous phase, the flagged flawed images will be sitting inside the `review_data/` directory, enriched with high-quality AI pseudo-boxes pre-labeled by the current champion model.
 
 ```bash
-# 1. Launch the Labelme graphical UI pointing directly to the human evaluation queue
-labelme review_data
+# 1. Launch the Labelme graphical UI enforcing the native xcb backend plugin over WSL2
+QT_QPA_PLATFORM=xcb labelme review_data
 
 # 2. Once you finish fine-tuning/approving bounding boxes and hit save, run the automation converter:
 python -m src.data_automation.parse_review_to_train

@@ -37,7 +37,10 @@ with DAG(
     # 2. Versions the expanded dataset in DVC and synchronizes it with Google Drive
     task_dvc_versioning = BashOperator(
         task_id='dvc_add_and_push',
-        bash_command="dvc add data",
+        bash_command="""
+            cd /home/eric/projects/corrosion_detection_mlops;
+            /home/eric/projects/corrosion_detection_mlops/.venv/bin/dvc add data;
+        """,
         env={
             "PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"
         },
@@ -57,7 +60,7 @@ with DAG(
     # 4. Locates the latest generated best.pt file and runs the strict governance evaluation (mAP50 + Recall vs Champion)
     task_evaluate_and_gate = BashOperator(
         task_id='model_governance_evaluation',
-        bash_command="/home/eric/projects/corrosion_detection_mlops/.venv/bin/python -m src.model_eval.yolo",
+        bash_command="cd /home/eric/projects/corrosion_detection_mlops && /home/eric/projects/corrosion_detection_mlops/.venv/bin/python -m src.model_eval.yolo",
         env={
             "PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"
         },

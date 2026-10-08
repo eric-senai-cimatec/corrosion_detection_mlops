@@ -26,7 +26,7 @@ def main():
     settings.update({"mlflow": True})
 
     # 1. Loads the dataset path (only data_path continues to come from config/yaml)
-    config = load_config('data/data.yaml')
+    config = load_config(os.path.join(PROJECT_ROOT, 'data', 'data.yaml'))
     data_path = config['path']
     
     # 2. AUTOMATIC AND DYNAMIC LOCATION OF THE LATEST TRAINED MODEL
@@ -104,7 +104,7 @@ def main():
         client = MlflowClient()
         model_name = "Corrosion_Detection_YOLO_Model"
         
-        business_cfg = load_config('business_args.yaml')
+        business_cfg = load_config(os.path.join(PROJECT_ROOT, 'business_args.yaml'))
         MIN_MAP50 = float(business_cfg['MIN_MAP50'])
         MIN_RECALL = float(business_cfg['MIN_RECALL'])
 

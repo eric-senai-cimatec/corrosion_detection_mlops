@@ -1,7 +1,8 @@
 import os
 import json
 import shutil
-import requests
+import subprocess
+import sys
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))
@@ -14,31 +15,43 @@ CLASS_MAPPING = {"corrosion": 0}
 
 
 def trigger_airflow_phase2():
-    """Asynchronously triggers the retraining pipeline using the Airflow REST API"""
-    url = "http://localhost:8080/api/v1/dags/corrosion_phase2_retrain/dagRuns"
-    auth = ("admin", "admin")
-    headers = {"Content-Type": "application/json"}
+    """Triggers the retraining pipeline directly via Airflow CLI, bypassing HTTP 401 errors"""
+    # Locates the exact path of the airflow binary inside your active virtual environment
+    venv_bin_dir = os.path.dirname(sys.executable)
+    airflow_binary = os.path.join(venv_bin_dir, "airflow")
+
+    # Command: airflow dags trigger corrosion_phase2_retrain
+    command = [airflow_binary, "dags", "trigger", "corrosion_phase2_retrain"]
 
     try:
-        response = requests.post(
-            url, json={"conf": {}}, headers=headers, auth=auth)
-        if response.status_code == 201:
-            print(
-                "🚀 [MLOps] Retraining and deployment pipeline triggered successfully in Airflow!")
-        else:
-            print(
-                f"⚠️ [Airflow API] Server responded with an unexpected status code: {response.status_code}")
+        print(f"📡 [CLI Trigger] Invoking local Airflow command: {' '.join(command)}")
+        
+        # Executes the terminal command securely from within Python
+        result = subprocess.run(
+            command,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            # Reinforces the environment path so Airflow knows where its home config sits
+            env={**os.environ, "AIRFLOW_HOME": "/home/eric/airflow"}
+        )
+
+        print("🚀 [MLOps] SUCCESS! Airflow CLI output:")
+        print(result.stdout.strip())
+
+    except subprocess.CalledProcessError as e:
+        print(f"❌ Failed to trigger DAG via Airflow CLI. Exit Code: {e.returncode}")
+        print(f"📝 Error Details: {e.stderr.strip()}")
     except Exception as e:
-        print(
-            f"❌ Critical network failure when attempting to connect to the Airflow API: {e}")
+        print(f"❌ Unexpected system failure when launching local trigger: {e}")
 
 
 def main():
     print("🔄 Starting data conversion from Labelme to YOLO format...")
 
     if not os.path.exists(REVIEW_DIR) or not os.listdir(REVIEW_DIR):
-        print(
-            "⚠️ 'review_data' folder is empty or non-existent. No curation data to process.")
+        print("⚠️ 'review_data' folder is empty or non-existent. No curation data to process.")
         return
 
     # Ensures that destination directories exist
@@ -91,8 +104,7 @@ def main():
             os.remove(json_path)
             processed_count += 1
 
-    print(
-        f"✅ Curation completed! {processed_count} images converted and merged into the training dataset.")
+    print(f"✅ Curation completed! {processed_count} images converted and merged into the training dataset.")
 
     # TRIGGER DISPATCH: Only runs after all files above are completely written to disk
     if processed_count > 0:

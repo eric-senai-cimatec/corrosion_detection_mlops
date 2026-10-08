@@ -87,11 +87,7 @@ The first pipeline (`corrosion_phase1_monitoring`) computes data drift metrics a
 If a Data Drift alert was triggered during the previous phase, the flagged flawed images will be sitting inside the `review_data/` directory, enriched with high-quality AI pseudo-boxes pre-labeled by the current champion model.
 
 ```bash
-# 1. Launch the Labelme graphical UI enforcing the native xcb backend plugin over WSL2
-QT_QPA_PLATFORM=xcb labelme review_data
-
-# 2. Once you finish fine-tuning/approving bounding boxes and hit save, run the automation converter:
-python -m src.data_automation.parse_review_to_train
+./run_curation.sh
 ```
 *💥 MLOps MAGIC:* The `parse_review_to_train.py` parser script translates the updated JSON structures into standard YOLO `.txt` files, merges them with your baseline training set, cleans up old staging directories, and **automatically hits a custom Webhook (REST HTTP API) waking up Airflow's Phase 2 DAG**, completely bypassing manual clicks on the orchestration board.
 

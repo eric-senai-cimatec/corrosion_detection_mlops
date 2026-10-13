@@ -1,5 +1,4 @@
 #!/bin/bash
-# Ativa o ambiente virtual caso não esteja ativo
 source .venv/bin/activate
 
 echo "🎨 Opening Labelme for Human-in-the-Loop curation..."

@@ -84,6 +84,30 @@ airflow standalone
 airflow dag-processor
 ```
 
+### Step 3.1: Configure SMTP Connection in Airflow UI (Anti-SSL & Sender Rule)
+To ensure alert delivery via Gmail and bypass strict Airflow 3.0 `Email/SMTP` hooks that cause connection errors (`[SSL: WRONG_VERSION_NUMBER]`), you must define the connection explicitly using the **Generic** type.
+
+1. Open the Airflow Web Dashboard (`http://localhost:8080`).
+2. Navigate to **Admin** -> **Connections** and click the **+** (Add a new record) button.
+3. Configure the connection fields exactly as defined below:
+   * **Connection Id:** `smtp_default` (or `gmail_connection`, corresponding to the `conn_id` string declared in your DAGs).
+   * **Connection Type:** `Generic`
+   * **Host:** `smtp.gmail.com`
+   * **Login:** `your_email@gmail.com`
+   * **Password:** *Your 16-digit Google App Password* (Generated under Google Account Security -> 2-Step Verification -> App Passwords).
+   * **Port:** `587`
+4. In the **Extra** textbox field, paste the unmapped unified JSON configuration exactly as follows:
+   ```json
+   {
+     "starttls": true,
+     "disable_ssl": true,
+     "use_ssl": false,
+     "from_email": "your_email@gmail.com"
+   }
+   ```
+   *💡 Note: Merging security parameters with `from_email` inside a single JSON dictionary fulfills required server parameters and eliminates 'unset from_email' execution exceptions.*
+5. Click **Save**.
+
 ### Step 4: Run DAG 1 (Monitoring & Observability)
 The first pipeline (`corrosion_phase1_monitoring`) computes data drift metrics and dynamically branches out decisions:
 1. Triggers the observability job: `python -m src.observability.monitor` (Injecting the absolute repository path inside the `PYTHONPATH` system environment variable).

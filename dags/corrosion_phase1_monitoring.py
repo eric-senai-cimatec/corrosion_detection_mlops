@@ -3,6 +3,7 @@ import os
 import json
 import pendulum
 from airflow import DAG
+from airflow.utils.email import send_email_smtp 
 from airflow.providers.standard.operators.bash import BashOperator
 from airflow.providers.standard.operators.python import BranchPythonOperator
 from airflow.providers.smtp.operators.smtp import EmailOperator
@@ -11,17 +12,48 @@ from airflow.providers.smtp.operators.smtp import EmailOperator
 PROJECT_ROOT = "/home/eric/projects/corrosion_detection_mlops"
 LOCAL_TZ = pendulum.timezone("America/Sao_Paulo")
 
+def gmail_fail_alert(context): 
+    ti = context["task_instance"] 
+    dag_id = ti.dag_id 
+    task_id = ti.task_id 
+    run_id = getattr(ti, "run_id", "unknown") 
+    execution_time = getattr(ti, "start_date", "unknown") 
+    error = str(context.get("exception", "Nenhuma exceção capturada")) 
+
+    base_url = os.getenv("AIRFLOW__WEBSERVER__BASE_URL", "http://localhost:8080") 
+    log_url = f"{base_url}/dags/{dag_id}/runs/{run_id}"
+
+    subject = f"🚨 Tarefa do Airflow Falha: {dag_id}. {task_id}"
+    html_content = f""" 
+    <h3>🚨 Tarefa do Airflow falhou!</h3> 
+    <ul> 
+      <li><b>DAG:</b> {dag_id}</li> 
+      <li><b>Tarefa:</b> {task_id}</li> 
+      <li><b>ID da Execução:</b> {run_id}</li> 
+      <li><b>Tempo de Execução:</b> {execution_time}</li> 
+      <li><b>Erro:</b> {error}</li> 
+    </ul> 
+    <p><a href="{log_url}">🔗 Exibir Logs da Falha no Airflow</a></p>
+    """
+
+    send_email_smtp( 
+        to="eric.oliveira.pro@gmail.com", 
+        subject=subject, 
+        html_content=html_content, 
+        conn_id="gmail_connection",  # ID da conexão SMTP criada no painel do Airflow
+    )
+
 default_args = {
     'owner': 'ai_team',
     'depends_on_past': False,
     'start_date': datetime(2026, 9, 30, tzinfo=LOCAL_TZ),
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
+    'on_failure_callback': gmail_fail_alert, # <- Ativa o alerta para qualquer task que falhar nesta DAG
 }
 
 def check_drift_and_decide():
     json_path = os.path.join(PROJECT_ROOT, "runs", "observability", "drift_report.json")
-
     print(f"🔍 [Airflow] Looking for report at: {json_path}")
 
     if not os.path.exists(json_path):
@@ -31,13 +63,10 @@ def check_drift_and_decide():
     with open(json_path, 'r') as f:
         report_data = json.load(f)
 
-    # Safe collection that attempts to read from both the metrics root and Evidently's deep structure
     metrics_root = report_data.get("metrics", {})
     
-    # Flexible handling: searches the root or inside internal test dictionaries
     dataset_drifted = metrics_root.get("dataset_drift", False)
     if not isinstance(dataset_drifted, bool): 
-        # If it is a complex Evidently dictionary, fetches the internal boolean value
         dataset_drifted = metrics_root.get("dataset_drift", {}).get("value", {}).get("dataset_drift", False)
 
     drift_share = metrics_root.get("share_of_drifted_columns", 0.0)
@@ -56,18 +85,16 @@ with DAG(
     'corrosion_phase1_monitoring',
     default_args=default_args,
     description='Phase 1 MLOps: Runs Observability and prepares data for Labelme if Drift is present',
-    schedule='0 8 * * *',  # Scheduled to run every day at 08:00 AM
+    schedule='0 8 * * *',  
     catchup=False,
     tags=['mlops', 'observability', 'corrosion']
 ) as dag:
 
-    # 1. Calculates Data Drift using Evidently AI, comparing webcam data against the training baseline
+    # 1. Calculates Data Drift using Evidently AI
     task_run_observability = BashOperator(
         task_id='run_observability_monitor',
         bash_command="/home/eric/projects/corrosion_detection_mlops/.venv/bin/python -m src.observability.monitor",
-        env={
-            "PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"
-        },
+        env={"PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"},
         cwd=PROJECT_ROOT
     )
 
@@ -87,17 +114,16 @@ with DAG(
     task_generate_pseudo_labels = BashOperator(
         task_id='generate_pseudo_labels',
         bash_command="/home/eric/projects/corrosion_detection_mlops/.venv/bin/python -m src.data_automation.send_to_review",
-        env={
-            "PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"
-        },
+        env={"PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"},
         cwd=PROJECT_ROOT
     )
 
-    # 3. Send e-mail alert
+    # 3. Send e-mail alert (Apenas se o fluxo seguir pelo desvio/drift de dados)
     task_send_email = EmailOperator(
         task_id='send_drift_email_alert',
         to='eric.oliveira.pro@gmail.com',
         subject='🚨 MLOps Alert: Data Drift Detected in Corrosion Monitor',
+        conn_id='gmail_connection',
         html_content="""
             <h3>Alerta de Observabilidade MLOps</h3>
             <p>O <b>Evidently AI</b> detectou um desvio estatístico crítico nos dados coletados pela API</p>

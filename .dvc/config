@@ -1,0 +1,5 @@
+[core]
+    autostage = true
+    remote = sharepoint_fieb
+['remote "sharepoint_fieb"']
+    url = /mnt/c/Users/eric.santoss/Sistema FIEB/Soft Robots - IA - mlops_for_computervision

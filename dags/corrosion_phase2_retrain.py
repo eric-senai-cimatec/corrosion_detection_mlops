@@ -21,22 +21,22 @@ def gmail_fail_alert(context):
 
     subject = f"🚨 Tarefa do Airflow Falha: {dag_id}. {task_id}"
     html_content = f""" 
-    <h3>🚨 Tarefa do Airflow falhou!</h3> 
+    <h3>🚨 Fall on Airflow Task!</h3> 
     <ul> 
       <li><b>DAG:</b> {dag_id}</li> 
-      <li><b>Tarefa:</b> {task_id}</li> 
-      <li><b>ID da Execução:</b> {run_id}</li> 
-      <li><b>Tempo de Execução:</b> {execution_time}</li> 
-      <li><b>Erro:</b> {error}</li> 
+      <li><b>Task:</b> {task_id}</li> 
+      <li><b>ID of execution:</b> {run_id}</li> 
+      <li><b>Tempo of execution:</b> {execution_time}</li> 
+      <li><b>Error:</b> {error}</li>
     </ul> 
-    <p><a href="{log_url}">🔗 Exibir Logs da Falha no Airflow</a></p>
+    <p><a href="{log_url}">🔗 Show Logs on Airflow</a></p>
     """
 
     send_email_smtp( 
         to="eric.oliveira.pro@gmail.com", 
         subject=subject, 
         html_content=html_content, 
-        conn_id="gmail_connection",  # ID da conexão SMTP criada no painel do Airflow
+        conn_id="gmail_connection",
     )
 
 default_args = {
@@ -45,7 +45,7 @@ default_args = {
     'start_date': datetime(2026, 9, 30, tzinfo=LOCAL_TZ),
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
-    'on_failure_callback': gmail_fail_alert, # <- Ativa o alerta para falhas no pipeline pesado de treino
+    'on_failure_callback': gmail_fail_alert,
 }
 
 with DAG(

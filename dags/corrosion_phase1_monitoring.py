@@ -40,7 +40,7 @@ def gmail_fail_alert(context):
         to="eric.oliveira.pro@gmail.com", 
         subject=subject, 
         html_content=html_content, 
-        conn_id="gmail_connection",  # ID da conexão SMTP criada no painel do Airflow
+        conn_id="gmail_connection",
     )
 
 default_args = {
@@ -49,7 +49,7 @@ default_args = {
     'start_date': datetime(2026, 9, 30, tzinfo=LOCAL_TZ),
     'retries': 1,
     'retry_delay': timedelta(minutes=5),
-    'on_failure_callback': gmail_fail_alert, # <- Ativa o alerta para qualquer task que falhar nesta DAG
+    'on_failure_callback': gmail_fail_alert,
 }
 
 def check_drift_and_decide():
@@ -118,18 +118,20 @@ with DAG(
         cwd=PROJECT_ROOT
     )
 
-    # 3. Send e-mail alert (Apenas se o fluxo seguir pelo desvio/drift de dados)
+    # 3. Send e-mail alert with EvidentlyAI dashboard attached
     task_send_email = EmailOperator(
         task_id='send_drift_email_alert',
         to='eric.oliveira.pro@gmail.com',
         subject='🚨 MLOps Alert: Data Drift Detected in Corrosion Monitor',
         conn_id='gmail_connection',
+        files=["{% raw %}/home/eric/projects/corrosion_detection_mlops/runs/observability/drift_dashboard.html{% endraw %}"],
         html_content="""
-            <h3>Alerta de Observabilidade MLOps</h3>
-            <p>O <b>Evidently AI</b> detectou um desvio estatístico crítico nos dados coletados pela API</p>
-            <p>A esteira de Active Learning foi acionada e os frames já estão aguardando curadoria na pasta <i>review_data/</i>.</p>
+            <h3>MLOps Observability Alert</h3>
+            <p><b>Evidently AI</b> has detected a critical statistical drift in the data collected by the API.</p>
+            <p>The Active Learning pipeline has been triggered, and the frames are already awaiting curation inside the <i>review_data/</i> folder.</p>
+            <p><b> Fischer Note:</b> The complete statistical dashboard has been attached to this email for deep analysis.</p>
             <br>
-            <p><i>Mensagem automática disparada pelo Apache Airflow 3.0+</i></p>
+            <p><i>Automated message triggered by Apache Airflow 3.0+</i></p>
         """
     )
 

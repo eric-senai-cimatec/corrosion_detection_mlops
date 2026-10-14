@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  # 📹 API DE SERVING (FASTAPI + INFERÊNCIA DA IA)
+  fastapi-serving:
+    build: .
+    container_name: corrosion_fastapi_serving
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - /dev/video0:/dev/video0 # Mapeia a webcam física para dentro do container
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu] # Injeta a RTX 3050 com CUDA no FastAPI
+    command: python src/serving/app.py
+
+  # 🏆 TRACKING SERVER DO MLFLOW
+  mlflow-server:
+    build: .
+    container_name: corrosion_mlflow_server
+    restart: always
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./mlruns:/app/mlruns
+    command: mlflow ui --host 0.0.0.0 --port 5000 --backend-store-uri sqlite:///mlruns/mlflow.db
+
+  # 🚀 AIRFLOW HUB (STANDALONE: WEB + SCHEDULER)
+  airflow-standalone:
+    build: .
+    container_name: corrosion_airflow_standalone
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - AIRFLOW__SMTP__SMTP_HOST=://gmail.com
+      - AIRFLOW__SMTP__SMTP_PORT=587
+      - AIRFLOW__SMTP__SMTP_STARTTLS=True
+      - AIRFLOW__SMTP__SMTP_SSL=False
+      - AIRFLOW__SMTP__SMTP_MAIL_FROM=eric.oliveira.pro@gmail.com
+    volumes:
+      - .:/app
+      - ~/airflow:/app/airflow
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu] # Permite que o Scheduler passe a GPU para os workers
+    command: airflow standalone
+
+  # 🧭 AIRFLOW DAG PROCESSOR (ISOLADO PARA O AIRFLOW 3.0+)
+  airflow-processor:
+    build: .
+    container_name: corrosion_airflow_processor
+    restart: always
+    volumes:
+      - .:/app
+      - ~/airflow:/app/airflow
+    command: airflow dag-processor

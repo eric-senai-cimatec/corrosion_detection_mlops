@@ -96,7 +96,7 @@ with DAG(
     # 5. CD (Continuous Deployment): Notifies the live API endpoint to dynamic reload the new champion model
     task_live_reload = BashOperator(
         task_id='api_live_reload',
-        bash_command='curl -X POST http://127.0.0',
+        bash_command='curl -X POST http://127.0.0.1:8000/reload',
         env={"PYTHONPATH": "/home/eric/projects/corrosion_detection_mlops"},
         cwd=PROJECT_ROOT
     )

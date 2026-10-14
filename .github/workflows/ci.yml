@@ -27,8 +27,8 @@ jobs:
 
     - name: Install project dependencies using uv
       run: |
-        uv pip install -U apache-airflow werkzeug opencv-python-headless labelme pytest mlflow ultralytics
+        uv pip install --system -U apache-airflow werkzeug opencv-python-headless labelme pytest mlflow ultralytics
 
     - name: Execute Test Suite via Pytest
       run: |
-        uv run pytest -v
+        pytest -v

@@ -20,15 +20,15 @@ jobs:
         python-version: '3.11'
 
     - name: Install uv execution engine
-      run: curl -LsSf https://astral.sh | sh
+      uses: astral-sh/setup-uv@v5
+      with:
+        version: "latest"
+        enable-cache: true
 
     - name: Install project dependencies using uv
       run: |
-        uv venv
-        . .venv/bin/activate
         uv pip install -U apache-airflow werkzeug opencv-python-headless labelme pytest mlflow ultralytics
 
     - name: Execute Test Suite via Pytest
       run: |
-        . .venv/bin/activate
-        pytest -v
+        uv run pytest -v
